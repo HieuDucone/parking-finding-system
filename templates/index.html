@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Smart Parking Finder - Real-time</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 400px;
+            background: #ffffff;
+            border-right: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .sidebar.collapsed {
+            width: 0;
+            min-width: 0;
+            border: none;
+            opacity: 0;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        .detail-panel {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 400px;
+            height: 100%;
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .detail-panel.active {
+            transform: translateX(0);
+        }
+        
+        .sidebar-header {
+            padding: 20px;
+            background: #4285f4;
+            color: white;
+        }
+        
+        .sidebar-header h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .search-section {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .search-box {
+            display: flex;
+            background: #f8f9fa;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+        }
+        
+        .search-input {
+            flex: 1;
+            padding: 12px 15px;
+            border: none;
+            background: transparent;
+            outline: none;
+            font-size: 14px;
+        }
+        
+        .search-btn {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 0 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .parking-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+        
+        .parking-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .parking-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .parking-item.active {
+            background: #e3f2fd;
+            border-left: 4px solid #4285f4;
+        }
+        
+        .parking-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+        
+        .parking-status {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        
+        .parking-slots {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .free-count {
+            background: #34a853;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .occupied-count {
+            color: #666;
+            font-size: 13px;
+        }
+        
+        .detail-header {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #ddd;
+            position: relative;
+        }
+        
+        .detail-title {
+            font-size: 22px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            padding-right: 50px;
+        }
+        
+        .detail-subtitle {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        
+        .detail-stats {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .stat-box {
+            flex: 1;
+            min-width: 80px;
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #eee;
+        }
+        
+        .stat-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #4285f4;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .sidebar-footer {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .map-controls {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+        }
+        
+        .control-btn {
+            width: 44px;
+            height: 44px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            background: #f8f9fa;
+            transform: scale(1.08);
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(66, 133, 244, 0.7); }
+            50% { transform: scale(1.05); }
+            70% { box-shadow: 0 0 0 15px rgba(66, 133, 244, 0); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(66, 133, 244, 0); }
+        }
+
+        .map-legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            padding: 12px 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 180px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 8px;
+            border: 2px solid white;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                position: absolute;
+                z-index: 1000;
+                transform: translateX(-100%);
+            }
+            
+            .sidebar.active {
+                transform: translateX(0);
+            }
+            
+            .detail-panel {
+                width: 100%;
+            }
+            
+            .map-legend {
+                display: none;
+            }
+        }
+        
+        .close-btn {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            width: 32px;
+            height: 32px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        
+        .detail-content {
+            padding: 20px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .info-section {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .route-btn {
+            margin-top: 15px;
+            width: 100%;
+            padding: 12px;
+            background: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .route-btn:hover {
+            background: #3367d6;
+        }
+        
+        .realtime-updates {
+            margin-top: 30px;
+        }
+        
+        .update-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 14px;
+        }
+        
+        .update-time {
+            color: #4285f4;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+        
+        /* BẢNG CHỈ ĐƯỜNG TÙY CHỈNH */
+        .leaflet-routing-container {
+            background: white !important;
+            padding: 15px !important;
+            border-radius: 10px !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25) !important;
+            width: 320px !important;
+            max-height: 500px !important;
+            overflow-y: auto !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+            position: absolute !important;
+            left: 20px !important;
+            top: 90px !important;
+            z-index: 999 !important;
+            border: 1px solid #ddd !important;
+        }
+        
+        /* Ẩn các phần không cần thiết */
+        .leaflet-routing-container h2,
+        .leaflet-routing-container h3 {
+            color: #333 !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+            margin-bottom: 10px !important;
+            padding-bottom: 8px !important;
+            border-bottom: 2px solid #4285f4 !important;
+        }
+        
+        .leaflet-routing-container .leaflet-routing-geocoders {
+            display: none !important;
+        }
+        
+        .leaflet-routing-container .leaflet-routing-alt {
+            background: #f8f9fa !important;
+            border-radius: 6px !important;
+            padding: 10px !important;
+            margin-bottom: 15px !important;
+        }
+        
+        .leaflet-routing-container .leaflet-routing-instructions {
+            margin-top: 15px !important;
+            max-height: 350px !important;
+            overflow-y: auto !important;
+        }
+        
+        .leaflet-routing-container .leaflet-routing-instruction {
+            padding: 10px 12px !important;
+            border-bottom: 1px solid #eee !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        .leaflet-routing-container .leaflet-routing-instruction:last-child {
+            border-bottom: none !important;
+        }
+        
+        .leaflet-routing-container .leaflet-routing-icon {
+            margin-right: 12px !important;
+            width: 24px !important;
+            height: 24px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: #4285f4 !important;
+            color: white !important;
+            border-radius: 50% !important;
+            font-size: 12px !important;
+            font-weight: bold !important;
+            flex-shrink: 0 !important;
+        }
+        
+        .leaflet-routing-container .leaflet-routing-text {
+            flex: 1 !important;
+            color: #333 !important;
+            line-height: 1.4 !important;
+            font-size: 14px !important;
+        }
+        
+        .leaflet-routing-container .distance {
+            color: #4285f4 !important;
+            font-weight: 600 !important;
+            min-width: 70px !important;
+            text-align: right !important;
+            font-size: 13px !important;
+            flex-shrink: 0 !important;
+        }
+        
+        /* Nút đóng mở */
+        .leaflet-routing-container .leaflet-routing-collapse-btn {
+            position: absolute !important;
+            right: 10px !important;
+            top: 10px !important;
+            background: #4285f4 !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 4px !important;
+            width: 24px !important;
+            height: 24px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            cursor: pointer !important;
+            font-size: 14px !important;
+        }
+        
+        /* Đường đi màu xanh đậm hơn */
+        .leaflet-routing-line {
+            stroke: #4285f4 !important;
+            stroke-width: 6 !important;
+            stroke-opacity: 0.8 !important;
+            fill: none !important;
+        }
+        
+        /* Custom panel để hiển thị rõ hơn */
+        .custom-route-panel {
+            display: none;
+        }
+        
+        /* Thông tin route */
+        .route-info {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            font-size: 13px;
+        }
+        
+        .route-info div {
+            margin-bottom: 5px;
+        }
+        
+        .route-info .distance {
+            color: #4285f4;
+            font-weight: bold;
+        }
+        
+        .route-info .time {
+            color: #34a853;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- SIDEBAR BÊN TRÁI -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h1>🅿 Smart Parking Finder</h1>
+                <p>Thông tin bãi xe real-time tại Hà Nội</p>
+            </div>
+            
+            <div class="search-section">
+                <div class="search-box">
+                    <input type="text" class="search-input" id="search-input" 
+                           placeholder="Nhập địa chỉ hiện tại..." 
+                           autocomplete="off">
+                    <button class="search-btn" onclick="searchLocation()">
+                        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="parking-list" id="parking-list">
+                <div class="parking-item loading">
+                    <div class="parking-name">Đang tải dữ liệu...</div>
+                </div>
+            </div>
+            
+            <div class="sidebar-footer">
+                Cập nhật real-time mỗi 30 giây | <span id="update-time">--:--</span>
+            </div>
+        </div>
+        
+        <!-- BẢN ĐỒ BÊN PHẢI -->
+        <div class="map-container">
+            <div id="map"></div>
+            
+            <div class="map-controls">
+                <button class="control-btn" onclick="toggleSidebar()" title="Danh sách bãi xe">
+                    📋
+                </button>
+                <button class="control-btn" onclick="locateUser()" title="Vị trí của tôi">
+                    📍
+                </button>
+                <button class="control-btn" id="satellite-btn" onclick="toggleSatellite()" title="Chế độ vệ tinh">
+                    🛰️
+                </button>
+            </div>
+
+            <div class="map-legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #34a853;"></div>
+                    <span>Nhiều chỗ trống</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #fbbc05;"></div>
+                    <span>Vừa phải</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ea4335;"></div>
+                    <span>Sắp đầy</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #4285f4;"></div>
+                    <span>Đang chọn</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- DETAIL PANEL BÊN PHẢI -->
+        <div class="detail-panel" id="detail-panel">
+            <div class="detail-header">
+                <button class="close-btn" onclick="closeDetailPanel()">×</button>
+                <div class="detail-title" id="detail-title">Chọn bãi xe</div>
+                <div class="detail-subtitle" id="detail-subtitle">Nhấn vào bãi xe để xem chi tiết</div>
+                
+                <div class="detail-stats">
+                    <div class="stat-box">
+                        <span class="stat-value" id="detail-occupied">--</span>
+                        <span class="stat-label">Đã đỗ</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-value" id="detail-free">--</span>
+                        <span class="stat-label">Còn trống</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-value" id="detail-capacity">--</span>
+                        <span class="stat-label">Tổng chỗ</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-value" id="detail-price">--</span>
+                        <span class="stat-label">đ/h</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detail-content">
+                <div class="info-section">
+                    <div style="font-size: 14px; color: #666; line-height: 1.6;">
+                        <p>📍 <strong>Địa chỉ:</strong> <span id="detail-address">--</span></p>
+                        <p>🕒 <strong>Giờ hoạt động:</strong> <span id="detail-hours">--</span></p>
+                        <p>📞 <strong>Liên hệ:</strong> <span id="detail-phone">--</span></p>
+                        <p>📝 <strong>Ghi chú:</strong> <span id="detail-note">--</span></p>
+                    </div>
+                    
+                    <button class="route-btn" onclick="showDirections()" id="route-btn">
+                        🚗 Chỉ đường đến bãi xe
+                    </button>
+                </div>
+                
+                <div class="realtime-updates">
+                    <div style="font-size: 16px; font-weight: 600; color: #333; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #4285f4;">
+                        Cập nhật real-time
+                    </div>
+                    <div id="realtime-updates">
+                        <div class="update-item">Chưa có cập nhật</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    
+    <script>
+        // Khởi tạo bản đồ
+        const map = L.map('map', {
+            maxZoom: 22,
+            minZoom: 10,
+            zoomControl: true
+        }).setView([21.0285, 105.8542], 13);
+        
+        // Tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Biến toàn cục
+        let parkingMarkers = [];
+        let selectedParking = null;
+        let userMarker = null;
+        let isSatellite = false;
+        let satelliteLayer;
+        let routeControl = null;
+        
+        // Tải dữ liệu bãi xe
+        async function loadParkingData() {
+            try {
+                const response = await fetch('/api/parking/realtime');
+                const parkings = await response.json();
+                
+                updateParkingList(parkings);
+                addParkingMarkers(parkings);
+                
+                document.getElementById('update-time').textContent = 
+                    parkings[0]?.updated_time || new Date().toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'});
+                    
+            } catch (error) {
+                console.error('Lỗi tải dữ liệu:', error);
+                document.getElementById('parking-list').innerHTML = 
+                    '<div class="parking-item"><div class="parking-name">Lỗi tải dữ liệu</div></div>';
+            }
+        }
+        
+        // Cập nhật danh sách bên trái
+        function updateParkingList(parkings) {
+            const container = document.getElementById('parking-list');
+            let html = '';
+            
+            parkings.forEach(parking => {
+                const percentage = Math.round((parking.current_free / parking.capacity) * 100);
+                let status = '';
+                
+                if (percentage >= 60) status = '🟢 Nhiều chỗ';
+                else if (percentage >= 30) status = '🟡 Vừa';
+                else status = '🔴 Sắp đầy';
+                
+                html += `
+                    <div class="parking-item" onclick="selectParking(${parking.id})" 
+                         data-id="${parking.id}">
+                        <div class="parking-name">${parking.name}</div>
+                        <div class="parking-status">${status} • Cập nhật: ${parking.updated_time}</div>
+                        <div class="parking-slots">
+                            <span class="free-count">🆓 ${parking.current_free} chỗ</span>
+                            <span class="occupied-count">🚗 ${parking.occupied}/${parking.capacity}</span>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+        
+        // Thêm markers lên bản đồ
+        function addParkingMarkers(parkings) {
+            parkingMarkers.forEach(marker => map.removeLayer(marker));
+            parkingMarkers = [];
+            
+            parkings.forEach(parking => {
+                const percentage = (parking.current_free / parking.capacity) * 100;
+                let color = '#34a853';
+                let iconText = 'P';
+                
+                if (percentage < 30) {
+                    color = '#ea4335';
+                    iconText = '🅿';
+                } else if (percentage < 60) {
+                    color = '#fbbc05';
+                }
+                
+                const marker = L.marker([parking.lat, parking.lng], {
+                    icon: L.divIcon({
+                        className: 'parking-marker',
+                        html: `<div style="background: ${color}; color: white; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">${iconText}</div>`,
+                        iconSize: [38, 38],
+                        iconAnchor: [19, 19]
+                    })
+                })
+                .addTo(map)
+                .bindPopup(`
+                    <div style="padding: 10px; max-width: 250px;">
+                        <strong>${parking.name}</strong><br>
+                        <small>${parking.address.substring(0, 50)}...</small><br>
+                        <div style="margin-top: 8px;">
+                            🆓 <strong>${parking.current_free}</strong> chỗ trống<br>
+                            🚗 ${parking.occupied}/${parking.capacity} chỗ<br>
+                            💰 ${(parking.hourly_rate || 0).toLocaleString()}đ/h
+                        </div>
+                        <button onclick="selectParking(${parking.id})" style="margin-top: 10px; width: 100%; padding: 8px; background: #4285f4; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                            Xem chi tiết
+                        </button>
+                    </div>
+                `);
+                
+                marker.parkingData = parking;
+                parkingMarkers.push(marker);
+            });
+        }
+        
+        // Chọn bãi xe - PHÓNG TO HẾT CỠ
+        async function selectParking(parkingId) {
+            try {
+                const response = await fetch(`/api/parking/${parkingId}`);
+                const parking = await response.json();
+                
+                selectedParking = parking;
+                const marker = parkingMarkers.find(m => m.parkingData.id === parkingId);
+                
+                // TÍNH TOÁN ZOOM LEVEL TỐI ƯU - PHÓNG TO HẾT CỠ
+                const currentZoom = map.getZoom();
+                const maxZoom = map.getMaxZoom(); // Zoom tối đa của tile layer
+                
+                console.log(`Current zoom: ${currentZoom}, Max zoom: ${maxZoom}`);
+                
+                // PHÓNG TO HẾT CỠ - Chỉ còn 1 cấp zoom nữa là không thể zoom thêm
+                const targetZoom = maxZoom - 1;
+                
+                console.log(`Phóng to từ ${currentZoom} đến ${targetZoom} (max là ${maxZoom})`);
+                
+                // Hiệu ứng flyTo mượt mà với thời gian phù hợp
+                const zoomDifference = Math.abs(targetZoom - currentZoom);
+                const flyDuration = Math.min(2.0, Math.max(0.8, zoomDifference * 0.1)); // Tính thời gian dựa trên khoảng cách zoom
+                
+                map.flyTo([parking.lat, parking.lng], targetZoom, {
+                    animate: true,
+                    duration: flyDuration,
+                    easeLinearity: 0.25
+                });
+                
+                // Thêm hiệu ứng sau khi phóng to xong
+                setTimeout(() => {
+                    // Đảm bảo đúng zoom level
+                    if (map.getZoom() < targetZoom) {
+                        map.setZoom(targetZoom, { animate: true });
+                    }
+                    
+                    // Thêm hiệu ứng rung nhẹ để người dùng biết đã phóng to xong
+                    map.panBy([0, -5], { animate: true, duration: 0.3 });
+                    setTimeout(() => {
+                        map.panBy([0, 5], { animate: true, duration: 0.3 });
+                    }, 350);
+                    
+                }, flyDuration * 1000 + 100);
+                
+                // Tự động chuyển sang chế độ vệ tinh nếu đang ở chế độ bản đồ
+                if (!isSatellite) {
+                    setTimeout(() => {
+                        toggleSatellite();
+                        // Sau khi chuyển sang vệ tinh, đảm bảo vẫn giữ zoom level
+                        setTimeout(() => {
+                            map.setZoom(targetZoom, { animate: false });
+                        }, 300);
+                    }, 500);
+                }
+                
+                // Mở popup và highlight marker
+                if (marker) {
+                    setTimeout(() => {
+                        marker.openPopup();
+                        highlightSelectedMarker(marker);
+                        
+                        // Thêm hiệu ứng cho popup
+                        const popup = marker.getPopup();
+                        if (popup) {
+                            popup.getElement().style.transform = 'scale(0.9)';
+                            popup.getElement().style.transition = 'transform 0.3s';
+                            setTimeout(() => {
+                                popup.getElement().style.transform = 'scale(1)';
+                            }, 50);
+                        }
+                    }, flyDuration * 1000);
+                }
+                
+                // Cập nhật detail panel
+                updateDetailPanel(parking);
+                
+                // Highlight trong danh sách
+                document.querySelectorAll('.parking-item').forEach(item => {
+                    item.classList.remove('active');
+                    if (parseInt(item.dataset.id) === parkingId) {
+                        item.classList.add('active');
+                        item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        
+                        // Thêm hiệu ứng cho item được chọn
+                        item.style.transform = 'scale(0.98)';
+                        item.style.transition = 'transform 0.2s';
+                        setTimeout(() => {
+                            item.style.transform = 'scale(1)';
+                        }, 200);
+                    }
+                });
+                
+                // Mở detail panel
+                setTimeout(() => {
+                    openDetailPanel();
+                }, flyDuration * 1000 / 2);
+                
+            } catch (error) {
+                console.error('Lỗi khi chọn bãi xe:', error);
+            }
+        }
+
+        // Làm nổi bật marker được chọn
+        function highlightSelectedMarker(selectedMarker) {
+            parkingMarkers.forEach(marker => {
+                const parking = marker.parkingData;
+                const percentage = (parking.current_free / parking.capacity) * 100;
+                let color = '#34a853';
+                let iconText = 'P';
+                
+                if (percentage < 30) {
+                    color = '#ea4335';
+                    iconText = '🅿';
+                } else if (percentage < 60) {
+                    color = '#fbbc05';
+                }
+                
+                marker.setIcon(L.divIcon({
+                    html: `<div style="background: ${color}; color: white; width: 32px; height: 32px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">${iconText}</div>`,
+                    iconSize: [38, 38],
+                    iconAnchor: [19, 19]
+                }));
+            });
+            
+            selectedMarker.setIcon(L.divIcon({
+                html: `<div style="background: #4285f4; color: white; width: 45px; height: 45px; border-radius: 50%; border: 4px solid white; box-shadow: 0 0 20px rgba(66,133,244,0.8); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; animation: pulse 2s infinite;">📍</div>`,
+                iconSize: [53, 53],
+                iconAnchor: [26.5, 26.5]
+            }));
+        }
+        
+        // Cập nhật detail panel
+        function updateDetailPanel(parking) {
+            document.getElementById('detail-title').textContent = parking.name;
+            document.getElementById('detail-subtitle').textContent = parking.description || 'Bãi xe công cộng';
+            document.getElementById('detail-occupied').textContent = parking.occupied;
+            document.getElementById('detail-free').textContent = parking.current_free;
+            document.getElementById('detail-capacity').textContent = parking.capacity;
+            document.getElementById('detail-price').textContent = parking.hourly_rate ? `${parking.hourly_rate}k` : '--';
+            document.getElementById('detail-address').textContent = parking.address;
+            document.getElementById('detail-hours').textContent = parking.is_24h ? '24/7' : '6:00 - 22:00';
+            document.getElementById('detail-phone').textContent = parking.phone || 'Chưa có';
+            document.getElementById('detail-note').textContent = parking.description || 'Không có ghi chú';
+            
+            // Cập nhật real-time updates
+            const updatesContainer = document.getElementById('realtime-updates');
+            if (parking.recent_updates && parking.recent_updates.length > 0) {
+                let updatesHtml = '';
+                parking.recent_updates.forEach((update, index) => {
+                    updatesHtml += `
+                        <div class="update-item">
+                            <span class="update-time">${update.time}</span>
+                            ${update.description}
+                        </div>
+                    `;
+                });
+                updatesContainer.innerHTML = updatesHtml;
+            } else {
+                updatesContainer.innerHTML = '<div class="update-item">Chưa có cập nhật gần đây</div>';
+            }
+            
+            // Kích hoạt nút chỉ đường
+            document.getElementById('route-btn').disabled = false;
+        }
+        
+        // Mở/đóng detail panel
+        function openDetailPanel() {
+            document.getElementById('detail-panel').classList.add('active');
+        }
+        
+        function closeDetailPanel() {
+            document.getElementById('detail-panel').classList.remove('active');
+            document.getElementById('route-btn').disabled = true;
+        }
+        
+        // Toggle sidebar
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('collapsed');
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 300);
+        }
+        
+        // Tìm kiếm địa chỉ
+        async function searchLocation() {
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) return;
+            
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}+Hà+Nội&limit=1`);
+                const data = await response.json();
+                
+                if (data.length > 0) {
+                    const result = data[0];
+                    const lat = parseFloat(result.lat);
+                    const lng = parseFloat(result.lon);
+                    
+                    map.flyTo([lat, lng], 15);
+                    
+                    L.marker([lat, lng])
+                        .addTo(map)
+                        .bindPopup(`📍 ${result.display_name}`)
+                        .openPopup();
+                }
+            } catch (error) {
+                console.error('Lỗi tìm kiếm:', error);
+            }
+        }
+        
+        // Xác định vị trí người dùng
+        function locateUser() {
+            if (!navigator.geolocation) {
+                alert('Trình duyệt không hỗ trợ định vị');
+                return;
+            }
+            
+            navigator.geolocation.getCurrentPosition(position => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                if (userMarker) map.removeLayer(userMarker);
+                
+                userMarker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        html: '<div style="background: #4285f4; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(66,133,244,0.5);"></div>',
+                        iconSize: [22, 22]
+                    })
+                })
+                .addTo(map)
+                .bindPopup('📍 Vị trí của bạn')
+                .openPopup();
+                
+                map.flyTo([lat, lng], 15);
+            });
+        }
+        
+        // Toggle chế độ vệ tinh
+        function toggleSatellite() {
+            const satelliteBtn = document.getElementById('satellite-btn');
+            
+            if (!isSatellite) {
+                satelliteLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}', {
+                    maxZoom: 22,
+                    subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
+                    attribution: 'Imagery © Google'
+                }).addTo(map);
+                isSatellite = true;
+                
+                if (satelliteBtn) {
+                    satelliteBtn.innerHTML = '🗺️';
+                    satelliteBtn.title = 'Chế độ bản đồ';
+                }
+            } else {
+                map.removeLayer(satelliteLayer);
+                isSatellite = false;
+                
+                if (satelliteBtn) {
+                    satelliteBtn.innerHTML = '🛰️';
+                    satelliteBtn.title = 'Chế độ vệ tinh';
+                }
+            }
+            
+            setTimeout(() => map.invalidateSize(), 100);
+        }
+        
+        // Chỉ đường
+        function showDirections() {
+            if (!selectedParking) {
+                alert('Vui lòng chọn bãi xe trước');
+                return;
+            }
+            
+            if (!userMarker) {
+                const useGPS = confirm('Chưa có vị trí của bạn. Bật GPS để lấy vị trí hiện tại?');
+                if (useGPS) {
+                    locateUser();
+                    setTimeout(() => {
+                        if (userMarker) calculateRoute();
+                    }, 2000);
+                }
+                return;
+            }
+            
+            calculateRoute();
+        }
+        
+        // Tính toán route
+        function calculateRoute() {
+            const userPos = userMarker.getLatLng();
+            const destPos = [selectedParking.lat, selectedParking.lng];
+            
+            // Xóa route cũ
+            if (routeControl) {
+                map.removeControl(routeControl);
+                routeControl = null;
+            }
+            
+            // Tạo route mới
+            routeControl = L.Routing.control({
+                waypoints: [
+                    L.latLng(userPos.lat, userPos.lng),
+                    L.latLng(destPos[0], destPos[1])
+                ],
+                router: L.Routing.osrmv1({
+                    serviceUrl: 'https://router.project-osrm.org/route/v1'
+                }),
+                lineOptions: {
+                    styles: [{ color: '#4285f4', opacity: 0.8, weight: 6 }]
+                },
+                fitSelectedRoutes: true,
+                showAlternatives: false,
+                routeWhileDragging: false,
+                show: true,
+                collapsible: true,
+                addWaypoints: false
+            }).addTo(map);
+            
+            // Xử lý sự kiện khi route được tính xong
+            routeControl.on('routesfound', function(e) {
+                const routes = e.routes;
+                const summary = routes[0].summary;
+                
+                console.log('Route calculated:', summary);
+            });
+        }
+        
+        // Thêm hàm để kiểm tra zoom level hiện tại
+        function checkZoomLevel() {
+            console.log(`Zoom hiện tại: ${map.getZoom()}/${map.getMaxZoom()}`);
+            console.log(`Có thể zoom in thêm: ${map.getZoom() < map.getMaxZoom()}`);
+            console.log(`Có thể zoom out thêm: ${map.getZoom() > map.getMinZoom()}`);
+        }
+        
+        // Tải dữ liệu mỗi 30 giây
+        setInterval(loadParkingData, 30000);
+        
+        // Khởi động
+        window.onload = function() {
+            loadParkingData();
+            
+            setInterval(loadParkingData, 30000);
+            
+            document.getElementById('search-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') searchLocation();
+            });
+            
+            // Vô hiệu hóa nút chỉ đường ban đầu
+            document.getElementById('route-btn').disabled = true;
+            
+            // Thêm hàm debug vào global
+            window.checkZoom = checkZoomLevel;
+        };
+    </script>
+</body>
+</html>
